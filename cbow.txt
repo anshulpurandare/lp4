@@ -1,0 +1,95 @@
+# a.Import libraries
+
+import numpy as np
+import nltk
+import re
+from nltk.tokenize import word_tokenize
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.utils import to_categorical
+
+
+# Download tokenizer (only first time)
+nltk.download('punkt')
+
+# Load text file
+with open("CBOW.txt", "r") as file:
+    text = file.read().lower()
+
+# Remove special characters and digits
+text = re.sub(r'[^a-zA-Z\s]', '', text)
+
+# Tokenize text into words
+tokens = word_tokenize(text)
+
+print("Total tokens:", len(tokens))
+print("Sample tokens:", tokens[:15])
+
+# Create a vocabulary
+vocab = sorted(set(tokens))
+vocab_size = len(vocab)
+print("Vocabulary size:", vocab_size)
+
+# Create mapping of word to index
+word2idx = {word: i for i, word in enumerate(vocab)}
+idx2word = {i: word for word, i in word2idx.items()}
+
+
+window_size = 2  # context window
+data = []
+
+# Create (context, target) pairs
+for i in range(window_size, len(tokens) - window_size):
+    context = [tokens[i - 2], tokens[i - 1], tokens[i + 1], tokens[i + 2]]
+    target = tokens[i]
+    data.append((context, target))
+
+print("Total training pairs:", len(data))
+print("Example pair:", data[100])
+
+
+# Convert words to one-hot vectors
+def one_hot_encode(word):
+    vector = np.zeros(vocab_size)
+    vector[word2idx[word]] = 1
+    return vector
+
+# Prepare training data
+X = []  # inputs (contexts)
+Y = []  # outputs (target)
+
+for context, target in data:
+    context_vec = np.sum([one_hot_encode(w) for w in context], axis=0)
+    X.append(context_vec)
+    Y.append(one_hot_encode(target))
+
+X = np.array(X)
+Y = np.array(Y)
+
+print("Input shape:", X.shape)
+print("Output shape:", Y.shape)
+
+
+model = Sequential()
+model.add(Dense(32, input_dim=vocab_size, activation='relu'))
+model.add(Dense(vocab_size, activation='softmax'))
+
+model.compile(loss='categorical_crossentropy', optimizer=Adam(learning_rate=0.01), metrics=['accuracy'])
+
+history = model.fit(X, Y, epochs=100, verbose=1)
+
+
+# Pick a random context to test
+import random
+idx = random.randint(0, len(data) - 1)
+test_context, actual_target = data[idx]
+
+context_vec = np.sum([one_hot_encode(w) for w in test_context], axis=0)
+pred = model.predict(context_vec.reshape(1, -1))
+pred_word = idx2word[np.argmax(pred)]
+
+print(f"\nRandom example index: {idx}")
+print("Context words:", test_context)
+print("Actual target word:", actual_target)
+print("Predicted target word:", pred_word)
